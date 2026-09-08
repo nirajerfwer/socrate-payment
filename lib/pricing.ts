@@ -1,13 +1,13 @@
 // lib/pricing.ts
 
 export type BillingCycle = "monthly" | "yearly";
-export type PlanId = "pro";
+// export type PlanId = "pro";
 export type Region = "IN" | "GLOBAL";
 
 type RegionPricing = Record<BillingCycle, { productId: string }>;
 
 // All product IDs come from env vars — nothing hardcoded here.
-const PLAN_PRICING: Record<PlanId, Record<Region, RegionPricing>> = {
+const PLAN_PRICING: Record<any, Record<Region, RegionPricing>> = {
   pro: {
     IN: {
       monthly: { productId: process.env.DODO_PRICE_ID_PRO_IN_MONTHLY ?? "" },
@@ -21,10 +21,11 @@ const PLAN_PRICING: Record<PlanId, Record<Region, RegionPricing>> = {
 };
 
 export function regionFromCountryCode(countryCode: string): Region {
-  return countryCode === "IN" ? "IN" : "GLOBAL";
+  // return countryCode === "IN" ? "IN" : "GLOBAL";
+  return "IN"
 }
 
-function isValidPlan(planId: string): planId is PlanId {
+function isValidPlan(planId: string): planId is any {
   return planId in PLAN_PRICING;
 }
 

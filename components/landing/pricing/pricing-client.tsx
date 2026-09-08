@@ -2,28 +2,74 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Reveal, RevealGroup } from "@/hooks/use-reveal";
-import { CheckoutButton } from "../../provider/chekout-button";
+import { GetMemberPlans, grantFreePlan, MemberPlan } from "@/lib/services";
+import { useUser } from "@/components/provider/authoprovider";
 
-export type Plan = {
-  id: string;
-  name: string;
-  price: string;
-  originalPrice: string | null;
-  period: string;
-  discountBadge: string | null;
-  description: string;
-  features: string[];
-  cta: string;
-  highlighted: boolean;
-  badge?: string;
-};
+const AppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.socrate.in";
 
-export function PricingClient({ plans }: { plans: Plan[] }) {
+export function PricingClient() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [plans, setPlans] = useState<MemberPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [claimingPlanId, setClaimingPlanId] = useState<string | null>(null);
+
+  const { userInfo, isLoading: userLoading, refresh } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlans() {
+      try {
+        const res = await GetMemberPlans();
+        if (cancelled) return;
+        setPlans(res.data.PlanList);
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Failed to fetch plans:", err);
+        setError("Failed to load pricing plans. Please try again later.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadPlans();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Sends an unauthenticated visitor to log in and come straight back to
+  // pricing so they can pick up the flow (free grant or checkout) right after.
+  const redirectToLogin = () => {
+    router.push(`/login?next=${encodeURIComponent("/pricing")}`);
+  };
+
+  const handleFreePlan = async (plan: MemberPlan) => {
+    if (!userInfo) {
+      redirectToLogin();
+      return;
+    }
+
+    setError(null);
+    setClaimingPlanId(plan._id);
+    try {
+      await grantFreePlan(plan._id);
+      await refresh(); // pick up the new membership before leaving
+      window.location.href = AppUrl;
+    } catch (err) {
+      console.error("Failed to grant free plan:", err);
+      setError("Couldn't activate your free plan. Please try again.");
+      setClaimingPlanId(null);
+    }
+  };
 
   return (
     <section id="pricing" className="py-20 md:py-28 bg-muted/50">
@@ -39,64 +85,104 @@ export function PricingClient({ plans }: { plans: Plan[] }) {
           </div>
         </Reveal>
 
-        <RevealGroup className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto" staggerMs={100}>
-          {plans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`relative rounded-xl p-7 border transition-all ${
-                plan.highlighted
-                  ? "border-foreground bg-background shadow-xl shadow-foreground/5 scale-[1.02]"
-                  : "border-border bg-background"
-              }`}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-foreground text-background text-xs font-medium">
-                  {plan.badge}
-                </div>
-              )}
+        {loading && (
+          <p className="text-center text-muted-foreground">Loading plans…</p>
+        )}
 
-              {plan.discountBadge && (
-                <div className="mb-4 inline-block px-3 py-1.5 rounded-full bg-yellow-400 text-black text-xs font-bold">
-                  {plan.discountBadge}
-                </div>
-              )}
+        {error && !loading && (
+          <p className="text-center text-destructive">{error}</p>
+        )}
 
-              <h3 className="font-semibold text-lg mb-1">{plan.name}</h3>
-              <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+        {!loading && !error && (
+          <RevealGroup className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto" staggerMs={100}>
+            {plans.map((plan) => {
+              const highlighted = plan.name === "Pro";
+              const isFree = plan.price === 0;
+              const isClaiming = claimingPlanId === plan._id;
 
-              <div className="mb-4">
-                {plan.originalPrice ? (
-                  <div className="flex items-baseline gap-3 mb-1">
-                    <span className="text-lg text-muted-foreground line-through">
-                      {plan.originalPrice}
+              return (
+                <div
+                  key={plan._id}
+                  className={`relative rounded-xl p-7 border transition-all ${
+                    highlighted
+                      ? "border-foreground bg-background shadow-xl shadow-foreground/5 scale-[1.02]"
+                      : "border-border bg-background"
+                  }`}
+                >
+                  {highlighted && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-foreground text-background text-xs font-medium">
+                      Most Popular
+                    </div>
+                  )}
+
+                  <h3 className="font-semibold text-lg mb-1">{plan.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+
+                  <div className="mb-4">
+                    <span className="text-4xl font-bold">
+                      {isFree ? "0" : `₹${plan.price}`}
                     </span>
-                    <span className="text-4xl font-bold">{plan.price}</span>
+                    <span className="text-muted-foreground text-sm">
+                      {isFree ? "/forever" : "/month"}
+                    </span>
                   </div>
-                ) : (
-                  <span className="text-4xl font-bold">{plan.price}</span>
-                )}
-                <span className="text-muted-foreground text-sm">{plan.period}</span>
-              </div>
 
-              {plan.name === "Pro" ? (
-                <CheckoutButton label={plan.cta} planId={plan.id} billingCycle={billingCycle} />
-              ) : (
-                <Button className="w-full mb-6" variant={plan.highlighted ? "default" : "outline"} asChild>
-                  <Link href="/login">{plan.cta}</Link>
-                </Button>
-              )}
+                  {isFree ? (
+                    <Button
+                      className="w-full mb-6"
+                      variant={highlighted ? "default" : "outline"}
+                      onClick={() => handleFreePlan(plan)}
+                      disabled={userLoading || isClaiming}
+                    >
+                      {isClaiming ? "Activating…" : "Get Started"}
+                    </Button>
+                  ) : plan.name === "Pro" ? (
+                    userInfo ? (
+                      <Button
+                        className="w-full mb-6"
+                        variant="default"
+                        onClick={() => router.push(`/checkout?planId=${plan._id}`)}
+                      >
+                        Start your 7 day free trial
+                      </Button>
+                    ) : (
+                      <Button
+                        className="w-full mb-6"
+                        variant="default"
+                        onClick={redirectToLogin}
+                        disabled={userLoading}
+                      >
+                        Start your 7 day free trial
+                      </Button>
+                    )
+                  ) : (
+                    <Button
+                      className="w-full mb-6"
+                      variant={highlighted ? "default" : "outline"}
+                      asChild
+                    >
+                      <Link href="/login">Choose Plan</Link>
+                    </Button>
+                  )}
 
-              <ul className="space-y-3">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="h-4 w-4 text-foreground shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </RevealGroup>
+                  <ul className="space-y-3">
+                    {plan.planFeatures
+                      .filter((f) => f.enabled)
+                      .map((f) => (
+                        <li
+                          key={f.featureId}
+                          className="flex items-center gap-2 text-sm text-muted-foreground"
+                        >
+                          <Check className="h-4 w-4 text-foreground shrink-0" />
+                          {f.limit} {f.featureKey.replace(/_/g, " ")}/month
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </RevealGroup>
+        )}
       </div>
     </section>
   );

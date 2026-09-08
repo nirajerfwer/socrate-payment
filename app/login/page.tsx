@@ -46,7 +46,7 @@ export default function LoginPage() {
             className="w-full h-11 mb-3 text-sm font-medium"
             onClick={() => {
               window.open(
-                "https://socrate-backend-9eza.onrender.com/auth/google",
+                `${process.env.NEXT_PUBLIC_BACKENDBASEURL}/auth/google`,
                 "_self",
               );
             }}

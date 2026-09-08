@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Space_Grotesk, Crimson_Text } from "next/font/google";
 import DodoProvider from "../components/provider/dodo-provider";
+import { UserProvider } from "@/components/provider/authoprovider";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -38,9 +39,11 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${crimsonText.variable}`}
     >
       <body>
+        <UserProvider>
         <DodoProvider/>
         {children}
         <Toaster />
+        </UserProvider>
 
         <Script
           src="https://cdn.flowsery.com/main.js"
